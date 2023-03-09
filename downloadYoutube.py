@@ -5,13 +5,17 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
 from pytube import Playlist
+import threading
 
 default_folder = "C:/Users/prapo/Music"
 
-app = tk.Tk()
-app.geometry("800x500")
+class DownloadThread(threading.Thread):
+    def _init__(self):
+        super()._init__()
+        self.daemon = True
+                
 
-   # select a folder to save the video
+# select a folder to save the video
 def select_folder():
     folder_selected = filedialog.askdirectory()
     folder_path.set(folder_selected)
@@ -29,14 +33,18 @@ def download():
     isPlaylist = bool(re.search(playlistRegex, url))
     if (isValidUrl):
         if(isPlaylist):
-            download_playlist(url)
+            DownloadThread(target=download_playlist(url)).start()
         else:
-            download_video(url)
+            DownloadThread(target=download_video(url)).start()
     else:
         url_entry.delete(0, tk.END)
         url_entry.insert(0, "Invalid URL")
         print("Invalid URL")
-        
+    download_speed.config(text="Download Speed: 0")
+    download_size.config(text="Download Size: 0")
+    current_download.config(text="Current Download: None")
+    progress.config(value=0)
+    root.update_idletasks()
     return
 
 
@@ -49,23 +57,19 @@ def download_video(url):
     else:
         best = video.getbest()
         extencion = ".mp4"
-    current_download["text"] = "Current Download: " + video.title
-    app.update_idletasks()
+    current_download.config(text="Current Download: " + video.title)
+    root.update_idletasks()
     title = best.title
     if (os.path.exists(os.path.join(folder_path.get(), video.title + ".mp3")) or os.path.exists(os.path.join(folder_path.get(), video.title + ".mp4"))):
-        current_download["text"] = "File already exists"
-        app.update_idletasks()
+        current_download.config(text="File already exists")
+        root.update_idletasks()
         print("File already exists")
         return
     
     best.download(callback=updateDownloadSpeedCallback,
                   filepath=folder_path.get() + "/" + title + extencion)
     print("Download Complete")
-    # progress["value"] = 0
-    # download_speed["text"] = "Download Speed: 0"
-    # download_size["text"] = "Download Size: 0"
-    # current_download["text"] = "Current Download: None"
-    # app.update_idletasks()
+    
     return;
 
 def download_playlist(url):
@@ -79,23 +83,18 @@ def download_playlist(url):
         else:
             audio = video.getbest()
             extencion = ".mp4"
-        current_download["text"] = "Current Download: " + video.title
-        app.update_idletasks()
+        current_download.config(text="Current Download: " + video.title)
+        root.update_idletasks()
         title = audio.title
         if (os.path.exists(os.path.join(folder_path.get(), video.title + ".mp3")) or os.path.exists(os.path.join(folder_path.get(), video.title + ".mp4"))):
-            current_download["text"] = "File already exists"
-            app.update_idletasks()
+            current_download.config(text="File already exists")
+            root.update_idletasks()
             print("File already exists")
             continue
         audio.download(callback=updateDownloadSpeedCallback,
                        filepath=folder_path.get() + "/" + title + extencion)
         print("Download of " + video.title + " Complete")
     print("Download Complete")
-    # download_speed["text"] = "Download Speed: 0"
-    # download_size["text"] = "Download Size: 0"
-    # current_download["text"] = "Current Download: None"
-    # progress["value"] = 0
-    # app.update_idletasks()
     return
 
 
@@ -109,57 +108,69 @@ def updateDownloadSpeedCallback(total, recvd, ratio, rate, eta):
     total_in_mbps = round(total_in_mbps, 2)
 
     # update download speed and size
-    progress["value"] = (recvd * 100) / total
+    progress.config(value=(recvd * 100) / total)
     # only show 2 decimal places
-    download_speed["text"] = "Download Speed: " + str(rate_in_mbps) + " mbps"
-    download_size["text"] = "Download Size: " + str(recvd_in_mbps) + "MBs / " + str(total_in_mbps) + " MBs"
-    app.update_idletasks()
+    download_speed.config(text= "Download Speed: " + str(rate_in_mbps) + " mbps")
+    download_size.config(text="Download Size: " + str(recvd_in_mbps) + "MBs / " + str(total_in_mbps) + " MBs")
+    root.update_idletasks()
 
-# title of the app
-app.title("Youtube Downloader")
+
+def on_closing():
+    root.destroy()
+    return
+
+
+# Tkinter GUI
+
+root = tk.Tk()
+root.geometry("800x500")
+# title of the root
+root.title("Youtube Downloader")
 
 # select video url
 url = tk.StringVar()
-url_label = ttk.Label(app, text="Video URL: ", font=("Arial", 10))
+url_label = ttk.Label(root, text="Video URL: ", font=("Arial", 10))
 url_label.place(x=20, y=20)
-url_entry = ttk.Entry(app, width=100, textvariable=url)
+url_entry = ttk.Entry(root, width=100, textvariable=url)
 url_entry.place(x=100, y=20)
 
 # button to enable or disable audio recording
 audio_button = tk.BooleanVar()
-audio_check = ttk.Checkbutton(app, text="Audio Only", variable=audio_button)
+audio_check = ttk.Checkbutton(root, text="Audio Only", variable=audio_button)
 audio_check.place(x=100, y=80)
 audio_button.set(True)
 
 # select folder to save video
 folder_path = tk.StringVar()
-folder_label = ttk.Label(app, text="Folder Path: ", font=("Arial", 10))
+folder_label = ttk.Label(root, text="Folder Path: ", font=("Arial", 10))
 folder_label.place(x=20, y=50)
-folder_entry = ttk.Entry(app, width=100, textvariable=folder_path)
+folder_entry = ttk.Entry(root, width=100, textvariable=folder_path)
 folder_entry.place(x=100, y=50)
 folder_path.set(default_folder)
 
 # select folder button
-folder_button = ttk.Button(app, text="Select Folder", command=lambda: select_folder())
+folder_button = ttk.Button(root, text="Select Folder", command=lambda: DownloadThread(target=select_folder).start())
 folder_button.place(x=20, y=80)
 
 # download button
-download_button = ttk.Button(app, text="Download", command=lambda: download())
+download_button = ttk.Button(root, text="Download", command=lambda: DownloadThread(target=download).start())
 download_button.place(x=20, y=110)
 
 #current music downloaded
 current_download = ttk.Label(
-    app, text="Current Download: None", font=("Arial", 10))
-current_download.place(x=100, y=110)
+    root, text="Current Download: None", font=("Arial", 10))
+current_download.place(x=100, y=80)
 
 # progress of download bar
-progress = ttk.Progressbar(app, orient="horizontal", length=400, mode="determinate")
-progress.place(x=20, y=140)
+progress = ttk.Progressbar(root, orient="horizontal", length=400, mode="determinate")
+progress.place(x=20, y=170)
 
 # progress to show download speed and total size
-download_speed = ttk.Label(app, text="Download Speed: 0", font=("Arial", 10))
-download_speed.place(x=20, y=170)
-download_size = ttk.Label(app, text="Download Size: 0", font=("Arial", 10))
-download_size.place(x=20, y=200)
+download_speed = ttk.Label(root, text="Download Speed: 0", font=("Arial", 10))
+download_speed.place(x=20, y=200)
+download_size = ttk.Label(root, text="Download Size: 0", font=("Arial", 10))
+download_size.place(x=20, y=230)
 
-app.mainloop()
+root.protocol("WM_DELETE_WINDOW", on_closing)
+
+root.mainloop()
